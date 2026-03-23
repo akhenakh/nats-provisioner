@@ -139,7 +139,7 @@ func (p *Provisioner) applyResource(ctx context.Context, kind, name string, node
 		if err != nil {
 			return err
 		}
-		return p.applyStream(ctx, cfg)
+		return p.applyStream(ctx, cfg, spec)
 
 	case "consumer":
 		var spec ConsumerSpec
@@ -158,7 +158,7 @@ func (p *Provisioner) applyResource(ctx context.Context, kind, name string, node
 		if err != nil {
 			return err
 		}
-		return p.applyConsumer(ctx, spec.StreamName, cfg)
+		return p.applyConsumer(ctx, spec.StreamName, cfg, spec)
 
 	case "keyvalue":
 		var spec KeyValueSpec
@@ -174,7 +174,7 @@ func (p *Provisioner) applyResource(ctx context.Context, kind, name string, node
 		if err != nil {
 			return err
 		}
-		return p.applyKeyValue(ctx, cfg)
+		return p.applyKeyValue(ctx, cfg, spec)
 
 	case "objectstore":
 		var spec ObjectStoreSpec
@@ -190,7 +190,7 @@ func (p *Provisioner) applyResource(ctx context.Context, kind, name string, node
 		if err != nil {
 			return err
 		}
-		return p.applyObjectStore(ctx, cfg)
+		return p.applyObjectStore(ctx, cfg, spec)
 
 	default:
 		log.Printf("Warning: Unknown kind '%s'. Skipping.", kind)
@@ -198,8 +198,8 @@ func (p *Provisioner) applyResource(ctx context.Context, kind, name string, node
 	}
 }
 
-func (p *Provisioner) applyStream(ctx context.Context, cfg jetstream.StreamConfig) error {
-	_, err := p.js.Stream(ctx, cfg.Name)
+func (p *Provisioner) applyStream(ctx context.Context, cfg jetstream.StreamConfig, spec StreamSpec) error {
+	stream, err := p.js.Stream(ctx, cfg.Name)
 	if errors.Is(err, jetstream.ErrStreamNotFound) {
 		log.Printf("Creating Stream: %s", cfg.Name)
 		_, err = p.js.CreateStream(ctx, cfg)
@@ -207,17 +207,32 @@ func (p *Provisioner) applyStream(ctx context.Context, cfg jetstream.StreamConfi
 	} else if err != nil {
 		return err
 	}
+
+	info, err := stream.Info(ctx)
+	if err != nil {
+		return err
+	}
+
+	if streamConfigEqual(info.Config, spec) {
+		return nil
+	}
+
 	log.Printf("Updating Stream: %s", cfg.Name)
 	_, err = p.js.UpdateStream(ctx, cfg)
 	return err
 }
 
-func (p *Provisioner) applyConsumer(ctx context.Context, streamName string, cfg jetstream.ConsumerConfig) error {
+func (p *Provisioner) applyConsumer(ctx context.Context, streamName string, cfg jetstream.ConsumerConfig, spec ConsumerSpec) error {
 	if streamName == "" {
 		return errors.New("streamName must be provided for a consumer")
 	}
 
-	_, err := p.js.Consumer(ctx, streamName, cfg.Durable)
+	stream, err := p.js.Stream(ctx, streamName)
+	if err != nil {
+		return err
+	}
+
+	consumer, err := stream.Consumer(ctx, cfg.Durable)
 	if errors.Is(err, jetstream.ErrConsumerNotFound) {
 		log.Printf("Creating Consumer: %s on Stream: %s", cfg.Durable, streamName)
 		_, err = p.js.CreateOrUpdateConsumer(ctx, streamName, cfg)
@@ -226,13 +241,22 @@ func (p *Provisioner) applyConsumer(ctx context.Context, streamName string, cfg 
 		return err
 	}
 
+	info, err := consumer.Info(ctx)
+	if err != nil {
+		return err
+	}
+
+	if consumerConfigEqual(info.Config, spec) {
+		return nil
+	}
+
 	log.Printf("Updating Consumer: %s on Stream: %s", cfg.Durable, streamName)
 	_, err = p.js.CreateOrUpdateConsumer(ctx, streamName, cfg)
 	return err
 }
 
-func (p *Provisioner) applyKeyValue(ctx context.Context, cfg jetstream.KeyValueConfig) error {
-	_, err := p.js.KeyValue(ctx, cfg.Bucket)
+func (p *Provisioner) applyKeyValue(ctx context.Context, cfg jetstream.KeyValueConfig, spec KeyValueSpec) error {
+	kv, err := p.js.KeyValue(ctx, cfg.Bucket)
 	if errors.Is(err, jetstream.ErrBucketNotFound) {
 		log.Printf("Creating KeyValue: %s", cfg.Bucket)
 		_, err = p.js.CreateKeyValue(ctx, cfg)
@@ -241,19 +265,55 @@ func (p *Provisioner) applyKeyValue(ctx context.Context, cfg jetstream.KeyValueC
 		return err
 	}
 
+	status, err := kv.Status(ctx)
+	if err != nil {
+		return err
+	}
+
+	if keyValueConfigEqual(status.Config(), spec) {
+		return nil
+	}
+
 	log.Printf("Updating KeyValue: %s", cfg.Bucket)
 	_, err = p.js.UpdateKeyValue(ctx, cfg)
 	return err
 }
 
-func (p *Provisioner) applyObjectStore(ctx context.Context, cfg jetstream.ObjectStoreConfig) error {
-	_, err := p.js.ObjectStore(ctx, cfg.Bucket)
+func (p *Provisioner) applyObjectStore(ctx context.Context, cfg jetstream.ObjectStoreConfig, spec ObjectStoreSpec) error {
+	obj, err := p.js.ObjectStore(ctx, cfg.Bucket)
 	if errors.Is(err, jetstream.ErrBucketNotFound) {
 		log.Printf("Creating ObjectStore: %s", cfg.Bucket)
 		_, err = p.js.CreateObjectStore(ctx, cfg)
 		return err
 	} else if err != nil {
 		return err
+	}
+
+	status, err := obj.Status(ctx)
+	if err != nil {
+		return err
+	}
+
+	stream, err := p.js.Stream(ctx, "OBJ_"+cfg.Bucket)
+	if err != nil {
+		return err
+	}
+	streamInfo, err := stream.Info(ctx)
+	if err != nil {
+		return err
+	}
+
+	existingCfg := jetstream.ObjectStoreConfig{
+		Bucket:      cfg.Bucket,
+		Description: status.Description(),
+		TTL:         status.TTL(),
+		Storage:     status.Storage(),
+		Replicas:    status.Replicas(),
+		MaxBytes:    streamInfo.Config.MaxBytes,
+	}
+
+	if objectStoreConfigEqual(existingCfg, spec) {
+		return nil
 	}
 
 	log.Printf("Updating ObjectStore: %s", cfg.Bucket)

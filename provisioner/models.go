@@ -230,3 +230,160 @@ func toObjectStoreConfig(spec ObjectStoreSpec) (jetstream.ObjectStoreConfig, err
 
 	return cfg, nil
 }
+
+func streamConfigEqual(existing jetstream.StreamConfig, spec StreamSpec) bool {
+	desired, err := toStreamConfig(spec)
+	if err != nil {
+		return false
+	}
+
+	if len(spec.Subjects) > 0 {
+		if len(existing.Subjects) != len(desired.Subjects) {
+			return false
+		}
+		for i := range existing.Subjects {
+			if existing.Subjects[i] != desired.Subjects[i] {
+				return false
+			}
+		}
+	}
+
+	if spec.Description != "" && existing.Description != desired.Description {
+		return false
+	}
+
+	if spec.NoAck && existing.NoAck != desired.NoAck {
+		return false
+	}
+
+	if spec.MaxAge != "" && existing.MaxAge != desired.MaxAge {
+		return false
+	}
+	if spec.MaxConsumers != 0 && existing.MaxConsumers != desired.MaxConsumers {
+		return false
+	}
+	if spec.MaxMsgsPerSubject != 0 && existing.MaxMsgsPerSubject != desired.MaxMsgsPerSubject {
+		return false
+	}
+	if spec.MaxMsgSize != 0 && existing.MaxMsgSize != desired.MaxMsgSize {
+		return false
+	}
+	if spec.Replicas != 0 && existing.Replicas != desired.Replicas {
+		return false
+	}
+	if spec.MaxBytes != 0 && existing.MaxBytes != desired.MaxBytes {
+		return false
+	}
+	if spec.MaxMsgs != 0 && existing.MaxMsgs != desired.MaxMsgs {
+		return false
+	}
+
+	if spec.Retention != "" && existing.Retention != desired.Retention {
+		return false
+	}
+	if spec.Storage != "" && existing.Storage != desired.Storage {
+		return false
+	}
+	if spec.Discard != "" && existing.Discard != desired.Discard {
+		return false
+	}
+
+	return true
+}
+
+func consumerConfigEqual(existing jetstream.ConsumerConfig, spec ConsumerSpec) bool {
+	desired, err := toConsumerConfig(spec)
+	if err != nil {
+		return false
+	}
+
+	if existing.Durable != desired.Durable {
+		return false
+	}
+	if spec.Description != "" && existing.Description != desired.Description {
+		return false
+	}
+	if existing.DeliverPolicy != desired.DeliverPolicy {
+		return false
+	}
+	if existing.AckPolicy != desired.AckPolicy {
+		return false
+	}
+	if spec.FilterSubject != "" && existing.FilterSubject != desired.FilterSubject {
+		return false
+	}
+	if existing.ReplayPolicy != desired.ReplayPolicy {
+		return false
+	}
+
+	if spec.AckWait != "" && existing.AckWait != desired.AckWait {
+		return false
+	}
+	if spec.MaxDeliver != 0 && existing.MaxDeliver != desired.MaxDeliver {
+		return false
+	}
+	if spec.MaxWaiting != 0 && existing.MaxWaiting != desired.MaxWaiting {
+		return false
+	}
+	if spec.MaxAckPending != 0 && existing.MaxAckPending != desired.MaxAckPending {
+		return false
+	}
+
+	return true
+}
+
+func keyValueConfigEqual(existing jetstream.KeyValueConfig, spec KeyValueSpec) bool {
+	desired, err := toKeyValueConfig(spec)
+	if err != nil {
+		return false
+	}
+
+	if spec.Description != "" && existing.Description != desired.Description {
+		return false
+	}
+	if spec.MaxValueSize != 0 && existing.MaxValueSize != desired.MaxValueSize {
+		return false
+	}
+	if spec.History != 0 && existing.History != desired.History {
+		return false
+	}
+	if spec.Storage != "" && existing.Storage != desired.Storage {
+		return false
+	}
+	if spec.TTL != "" && existing.TTL != desired.TTL {
+		return false
+	}
+	if spec.Replicas != 0 && existing.Replicas != desired.Replicas {
+		return false
+	}
+	if spec.MaxBytes != 0 && existing.MaxBytes != desired.MaxBytes {
+		return false
+	}
+
+	return true
+}
+
+func objectStoreConfigEqual(existing jetstream.ObjectStoreConfig, spec ObjectStoreSpec) bool {
+	desired, err := toObjectStoreConfig(spec)
+	if err != nil {
+		return false
+	}
+
+	if spec.Description != "" && existing.Description != desired.Description {
+		return false
+	}
+	if spec.Storage != "" && existing.Storage != desired.Storage {
+		return false
+	}
+	if spec.TTL != "" && existing.TTL != desired.TTL {
+		return false
+	}
+	if spec.Replicas != 0 && existing.Replicas != desired.Replicas {
+		return false
+	}
+	if spec.MaxBytes != 0 && existing.MaxBytes != desired.MaxBytes {
+		return false
+	}
+
+	return true
+}
