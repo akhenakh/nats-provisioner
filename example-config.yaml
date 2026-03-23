@@ -1,33 +1,23 @@
----
-apiVersion: jetstream.nats.io/v1beta2
 kind: Stream
-metadata:
-  name: ORDERS
-spec:
-  subjects:
-    - "orders.*"
-  storage: file
-  max_age: 1h
-  replicas: 1
+name: ORDERS
+subjects:
+  - "orders.*"
+storage: file
+max_age: 1h
+replicas: 1
 
 ---
-apiVersion: jetstream.nats.io/v1beta2
 kind: Consumer
-metadata:
-  name: orders-processor
-spec:
-  streamName: ORDERS
-  durable_name: orders-processor
-  deliver_policy: all
-  ack_policy: explicit
-  max_deliver: 5
+name: orders-processor
+streamName: ORDERS
+durable_name: orders-processor
+deliver_policy: all
+ack_policy: explicit
+max_deliver: 5
 
 ---
-apiVersion: jetstream.nats.io/v1beta2
 kind: KeyValue
-metadata:
-  name: CONFIG_DATA
-spec:
-  description: "Application Configurations"
-  history: 5
-  ttl: 24h
+name: CONFIG_DATA
+description: "Application Configurations"
+history: 5
+ttl: 24h

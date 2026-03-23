@@ -6,21 +6,10 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
-	"gopkg.in/yaml.v3"
 )
 
-type ResourceWrapper struct {
-	ApiVersion string    `yaml:"apiVersion"`
-	Kind       string    `yaml:"kind"`
-	Metadata   Metadata  `yaml:"metadata"`
-	Spec       yaml.Node `yaml:"spec"`
-}
-
-type Metadata struct {
-	Name string `yaml:"name"`
-}
-
 type StreamSpec struct {
+	Kind              string   `yaml:"kind"`
 	Name              string   `yaml:"name"`
 	Subjects          []string `yaml:"subjects"`
 	Storage           string   `yaml:"storage"`
@@ -38,6 +27,7 @@ type StreamSpec struct {
 }
 
 type ConsumerSpec struct {
+	Kind          string `yaml:"kind"`
 	StreamName    string `yaml:"streamName"`
 	Durable       string `yaml:"durable_name"`
 	Description   string `yaml:"description"`
@@ -52,7 +42,8 @@ type ConsumerSpec struct {
 }
 
 type KeyValueSpec struct {
-	Bucket       string `yaml:"bucket"`
+	Kind         string `yaml:"kind"`
+	Bucket       string `yaml:"name"`
 	Description  string `yaml:"description"`
 	MaxValueSize int32  `yaml:"max_value_size"`
 	History      uint8  `yaml:"history"`
@@ -63,7 +54,8 @@ type KeyValueSpec struct {
 }
 
 type ObjectStoreSpec struct {
-	Bucket      string `yaml:"bucket"`
+	Kind        string `yaml:"kind"`
+	Bucket      string `yaml:"name"`
 	Description string `yaml:"description"`
 	TTL         string `yaml:"ttl"`
 	MaxBytes    int64  `yaml:"max_bytes"`

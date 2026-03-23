@@ -64,7 +64,7 @@ nats-provisioner -s tls://nats.production.io:4222 \
 
 ## Configuration Format
 
-The YAML format mimics Kubernetes manifests. You can define multiple resources in the same file by separating them with `---`. 
+Define resources in simple YAML documents. Separate multiple resources with `---`. 
 
 *Note: Time durations should be formatted as Go duration strings (e.g., `1s`, `2m`, `1h`, `24h`).*
 
@@ -73,7 +73,7 @@ Streams define message storage. They hold messages and enforce limits like size,
 
 | Field | Type | Allowed Values | Description |
 |---|---|---|---|
-| `name` | string | | **(Optional)** Overrides `metadata.name`. The unique name of the stream. |
+| `name` | string | | The unique name of the stream. |
 | `description` | string | | A human-readable description of the stream. |
 | `subjects` | []string | | A list of NATS subjects to consume from (wildcards `*` and `>` supported). |
 | `storage` | string | `file` (default), `memory` | The storage backend to use for the Stream. |
@@ -90,18 +90,14 @@ Streams define message storage. They hold messages and enforce limits like size,
 
 **Example:**
 ```yaml
----
-apiVersion: jetstream.nats.io/v1beta2
 kind: Stream
-metadata:
-  name: ORDERS
-spec:
-  subjects:
-    - "orders.*"
-  storage: file
-  retention: limits
-  max_age: 24h
-  replicas: 3
+name: ORDERS
+subjects:
+  - "orders.*"
+storage: file
+retention: limits
+max_age: 24h
+replicas: 3
 ```
 
 ### Consumer
@@ -109,8 +105,8 @@ Consumers act as stateful views into a Stream, tracking which messages have been
 
 | Field | Type | Allowed Values | Description |
 |---|---|---|---|
+| `name` | string | | The durable name for the consumer. |
 | `streamName` | string | | **(Required)** The name of the Stream this consumer is bound to. |
-| `durable_name` | string | | **(Optional)** Overrides `metadata.name`. The durable name for the consumer. |
 | `description` | string | | A human-readable description. |
 | `deliver_policy` | string | `all` (default), `last`, `new`, `by_start_sequence`, `by_start_time` | Where to start delivering messages from. |
 | `ack_policy` | string | `explicit` (default), `none`, `all` | How messages should be acknowledged. |
@@ -123,18 +119,14 @@ Consumers act as stateful views into a Stream, tracking which messages have been
 
 **Example:**
 ```yaml
----
-apiVersion: jetstream.nats.io/v1beta2
 kind: Consumer
-metadata:
-  name: orders-processor
-spec:
-  streamName: ORDERS
-  deliver_policy: all
-  ack_policy: explicit
-  ack_wait: 30s
-  max_deliver: 5
-  filter_subject: "orders.us.>"
+name: orders-processor
+streamName: ORDERS
+deliver_policy: all
+ack_policy: explicit
+ack_wait: 30s
+max_deliver: 5
+filter_subject: "orders.us.>"
 ```
 
 ### KeyValue
@@ -142,7 +134,7 @@ A Key-Value store backed by a JetStream stream.
 
 | Field | Type | Allowed Values | Description |
 |---|---|---|---|
-| `bucket` | string | | **(Optional)** Overrides `metadata.name`. The unique name for the KV Store. |
+| `name` | string | | The unique name for the KV Store. |
 | `description` | string | | A human-readable description. |
 | `storage` | string | `file` (default), `memory` | The storage backend to use for the KV Store. |
 | `history` | uint8 | `1` to `64` | The number of historical values to keep per key. |
@@ -153,17 +145,13 @@ A Key-Value store backed by a JetStream stream.
 
 **Example:**
 ```yaml
----
-apiVersion: jetstream.nats.io/v1beta2
 kind: KeyValue
-metadata:
-  name: APP_CONFIG
-spec:
-  description: "Global Application Configurations"
-  history: 5
-  ttl: 720h
-  storage: memory
-  replicas: 3
+name: APP_CONFIG
+description: "Global Application Configurations"
+history: 5
+ttl: 720h
+storage: memory
+replicas: 3
 ```
 
 ### ObjectStore
@@ -171,7 +159,7 @@ An Object Store optimized for large files/blobs, backed by JetStream.
 
 | Field | Type | Allowed Values | Description |
 |---|---|---|---|
-| `bucket` | string | | **(Optional)** Overrides `metadata.name`. The unique name for the Object Store. |
+| `name` | string | | The unique name for the Object Store. |
 | `description` | string | | A human-readable description. |
 | `storage` | string | `file` (default), `memory` | The storage backend to use for the Object Store. |
 | `ttl` | duration | e.g., `24h` | The expiry time for objects. Objects older than this will be deleted. |
@@ -180,16 +168,12 @@ An Object Store optimized for large files/blobs, backed by JetStream.
 
 **Example:**
 ```yaml
----
-apiVersion: jetstream.nats.io/v1beta2
 kind: ObjectStore
-metadata:
-  name: PROFILE_PICTURES
-spec:
-  description: "User uploaded profile images"
-  ttl: 8760h
-  storage: file
-  replicas: 3
+name: PROFILE_PICTURES
+description: "User uploaded profile images"
+ttl: 8760h
+storage: file
+replicas: 3
 ```
 
 ## License

@@ -83,8 +83,8 @@ func (p *Provisioner) ProvisionFile(ctx context.Context, path string) error {
 
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	for {
-		var wrapper ResourceWrapper
-		err := decoder.Decode(&wrapper)
+		var node yaml.Node
+		err := decoder.Decode(&node)
 		if err == io.EOF {
 			break
 		}
@@ -92,26 +92,46 @@ func (p *Provisioner) ProvisionFile(ctx context.Context, path string) error {
 			return fmt.Errorf("failed to decode YAML in %s: %w", path, err)
 		}
 
-		if wrapper.Kind == "" {
+		kind, name, err := extractKindAndName(&node)
+		if err != nil {
+			return err
+		}
+		if kind == "" {
 			continue
 		}
 
-		if err := p.applyResource(ctx, wrapper); err != nil {
-			return fmt.Errorf("failed to apply %s '%s': %w", wrapper.Kind, wrapper.Metadata.Name, err)
+		if err := p.applyResource(ctx, kind, name, &node); err != nil {
+			return fmt.Errorf("failed to apply %s '%s': %w", kind, name, err)
 		}
 	}
 	return nil
 }
 
-func (p *Provisioner) applyResource(ctx context.Context, res ResourceWrapper) error {
-	switch res.Kind {
-	case "Stream":
+func extractKindAndName(node *yaml.Node) (string, string, error) {
+	var raw map[string]interface{}
+	if err := node.Decode(&raw); err != nil {
+		return "", "", err
+	}
+
+	kind, _ := raw["kind"].(string)
+	if kind == "" {
+		return "", "", nil
+	}
+
+	kind = strings.ToLower(kind)
+	name, _ := raw["name"].(string)
+	return kind, name, nil
+}
+
+func (p *Provisioner) applyResource(ctx context.Context, kind, name string, node *yaml.Node) error {
+	switch kind {
+	case "stream":
 		var spec StreamSpec
-		if err := res.Spec.Decode(&spec); err != nil {
+		if err := node.Decode(&spec); err != nil {
 			return err
 		}
 		if spec.Name == "" {
-			spec.Name = res.Metadata.Name
+			spec.Name = name
 		}
 		p.expected.Streams[spec.Name] = true
 
@@ -121,13 +141,13 @@ func (p *Provisioner) applyResource(ctx context.Context, res ResourceWrapper) er
 		}
 		return p.applyStream(ctx, cfg)
 
-	case "Consumer":
+	case "consumer":
 		var spec ConsumerSpec
-		if err := res.Spec.Decode(&spec); err != nil {
+		if err := node.Decode(&spec); err != nil {
 			return err
 		}
 		if spec.Durable == "" {
-			spec.Durable = res.Metadata.Name
+			spec.Durable = name
 		}
 		if p.expected.Consumers[spec.StreamName] == nil {
 			p.expected.Consumers[spec.StreamName] = make(map[string]bool)
@@ -140,13 +160,13 @@ func (p *Provisioner) applyResource(ctx context.Context, res ResourceWrapper) er
 		}
 		return p.applyConsumer(ctx, spec.StreamName, cfg)
 
-	case "KeyValue":
+	case "keyvalue":
 		var spec KeyValueSpec
-		if err := res.Spec.Decode(&spec); err != nil {
+		if err := node.Decode(&spec); err != nil {
 			return err
 		}
 		if spec.Bucket == "" {
-			spec.Bucket = res.Metadata.Name
+			spec.Bucket = name
 		}
 		p.expected.KeyValues[spec.Bucket] = true
 
@@ -156,13 +176,13 @@ func (p *Provisioner) applyResource(ctx context.Context, res ResourceWrapper) er
 		}
 		return p.applyKeyValue(ctx, cfg)
 
-	case "ObjectStore":
+	case "objectstore":
 		var spec ObjectStoreSpec
-		if err := res.Spec.Decode(&spec); err != nil {
+		if err := node.Decode(&spec); err != nil {
 			return err
 		}
 		if spec.Bucket == "" {
-			spec.Bucket = res.Metadata.Name
+			spec.Bucket = name
 		}
 		p.expected.ObjectStores[spec.Bucket] = true
 
@@ -173,7 +193,7 @@ func (p *Provisioner) applyResource(ctx context.Context, res ResourceWrapper) er
 		return p.applyObjectStore(ctx, cfg)
 
 	default:
-		log.Printf("Warning: Unknown kind '%s'. Skipping.", res.Kind)
+		log.Printf("Warning: Unknown kind '%s'. Skipping.", kind)
 		return nil
 	}
 }
@@ -241,7 +261,6 @@ func (p *Provisioner) applyObjectStore(ctx context.Context, cfg jetstream.Object
 	return err
 }
 
-// DetectOrphans returns a list of resource names that exist on NATS but aren't in the YAML
 func (p *Provisioner) DetectOrphans(ctx context.Context) ([]string, error) {
 	var orphans []string
 
