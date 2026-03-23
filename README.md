@@ -9,15 +9,41 @@ Especially useful for developers to provision a local NATS server or non Kuberne
 ## Features
 
 - **No Kubernetes Required**: Pure Go CLI. No CRDs, no Kube API server.
-- **Idempotent**: Safely run it on every commit. It creates resources if they don't exist and updates them if they do.
+- **Idempotent**: Safely run it on every commit. Creates resources if they don't exist, updates only when configuration differs, and skips unchanged resources.
 - **GitOps Native**: Can clone configurations directly from private or public Git repositories using memory/temporary storage.
 - **Secure Auth**: Supports NKey, Username/Password, and TLS connections.
+- **Orphan Detection**: Optional flag to detect resources that exist on the server but aren't in your configuration files.
+- **JSON Output**: Optional JSON-formatted logs for easy parsing and integration with log aggregation systems.
 - **Zero-Lag Schema**: Because it unmarshals YAML directly into the official `nats.go` configuration structs, it automatically supports **100% of all new NATS features** the moment you update the library. No waiting for tool maintainers to add support for new fields!
 
 
 ## Usage
 
 The tool accepts several flags to define how to connect to NATS and where to find the YAML configurations.
+
+```
+Usage of nats-provisioner:
+  -detect-orphans
+        Print resources that exist on the NATS server but are not in the configuration files
+  -git-pass string
+        Git Password/Token (for private repos)
+  -git-url string
+        Git repository URL containing configurations
+  -git-user string
+        Git Username (for private repos)
+  -json
+        Output logs in JSON format
+  -nkey string
+        NATS NKey Seed
+  -pass string
+        NATS Password
+  -path string
+        Local path to YAML file or directory
+  -s string
+        NATS Server URL (default "nats://127.0.0.1:4222")
+  -user string
+        NATS Username
+```
 
 ### Local Files
 
@@ -41,6 +67,46 @@ nats-provisioner -s nats://localhost:4222 \
   -git-url https://github.com/my-org/nats-infra.git \
   -git-user my-ci-bot \
   -git-pass github_pat_11ABCD...
+```
+
+### JSON Output
+
+For integration with log aggregation systems or CI/CD pipelines, use the `-json` flag to output structured JSON logs:
+
+```bash
+nats-provisioner -json -path ./configs.yaml
+```
+
+**Example output:**
+```json
+{"level":"INFO","msg":"processing file","path":"configs.yaml"}
+{"level":"INFO","msg":"creating stream","name":"ORDERS"}
+{"level":"INFO","msg":"provisioning complete"}
+```
+
+### Detecting Orphan Resources
+
+Use the `-detect-orphans` flag to find resources that exist on the NATS server but are not defined in your configuration files:
+
+```bash
+nats-provisioner -path ./configs.yaml -detect-orphans
+```
+
+**Text output:**
+```
+--- Scanning for Orphan Resources ---
+[Orphan] Stream: MANUAL_STREAM
+[Orphan] Stream: UNTRACKED_STREAM
+Total orphan resources detected: 2
+-------------------------------------
+```
+
+**JSON output (with `-json` flag):**
+```json
+{"level":"INFO","msg":"scanning for orphan resources"}
+{"level":"WARN","msg":"orphan resource detected","kind":"Stream","name":"MANUAL_STREAM"}
+{"level":"WARN","msg":"orphan resource detected","kind":"Stream","name":"UNTRACKED_STREAM"}
+{"level":"INFO","msg":"orphan scan complete","count":2}
 ```
 
 ## Authentication

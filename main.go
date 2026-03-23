@@ -5,9 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
@@ -16,7 +17,7 @@ import (
 	"github.com/akhenakh/nats-provisioner/provisioner"
 )
 
-func fetchFromGit(repoURL, gitUser, gitPass string) (string, error) {
+func fetchFromGit(logger *slog.Logger, repoURL, gitUser, gitPass string) (string, error) {
 	tempDir, err := os.MkdirTemp("", "nats-provisioner-")
 	if err != nil {
 		return "", err
@@ -32,7 +33,7 @@ func fetchFromGit(repoURL, gitUser, gitPass string) (string, error) {
 		cloneOpts.Auth = &http.BasicAuth{Username: gitUser, Password: gitPass}
 	}
 
-	log.Printf("Cloning git repository: %s...", repoURL)
+	logger.Info("cloning git repository", "url", repoURL)
 	if _, err = git.PlainClone(tempDir, false, cloneOpts); err != nil {
 		return "", fmt.Errorf("failed to clone repository: %w", err)
 	}
@@ -52,20 +53,33 @@ func main() {
 	gitPass := flag.String("git-pass", "", "Git Password/Token (for private repos)")
 
 	detectOrphans := flag.Bool("detect-orphans", false, "Print resources that exist on the NATS server but are not in the configuration files")
+	jsonOutput := flag.Bool("json", false, "Output logs in JSON format")
 
 	flag.Parse()
 
+	opts := &slog.HandlerOptions{Level: slog.LevelInfo}
+	var handler slog.Handler
+	if *jsonOutput {
+		handler = slog.NewJSONHandler(os.Stdout, opts)
+	} else {
+		handler = slog.NewTextHandler(os.Stdout, opts)
+	}
+	logger := slog.New(handler)
+	slog.SetDefault(logger)
+
 	if *localPath == "" && *gitURL == "" {
-		log.Fatal("You must provide either --path or --git-url")
+		logger.Error("you must provide either --path or --git-url")
+		os.Exit(1)
 	}
 
 	targetDir := *localPath
 	var cleanupDir func()
 
 	if *gitURL != "" {
-		dir, err := fetchFromGit(*gitURL, *gitUser, *gitPass)
+		dir, err := fetchFromGit(logger, *gitURL, *gitUser, *gitPass)
 		if err != nil {
-			log.Fatalf("Git error: %v", err)
+			logger.Error("git error", "error", err)
+			os.Exit(1)
 		}
 		targetDir = dir
 		cleanupDir = func() { os.RemoveAll(dir) }
@@ -74,7 +88,8 @@ func main() {
 
 	prov, err := provisioner.NewProvisioner(*natsURL, *nkey, *user, *pass)
 	if err != nil {
-		log.Fatalf("Provisioner setup failed: %v", err)
+		logger.Error("provisioner setup failed", "error", err)
+		os.Exit(1)
 	}
 	defer prov.Close()
 
@@ -89,34 +104,49 @@ func main() {
 
 		ext := filepath.Ext(path)
 		if ext == ".yaml" || ext == ".yml" {
-			log.Printf("Processing file: %s", path)
+			logger.Info("processing file", "path", path)
 			if err := prov.ProvisionFile(ctx, path); err != nil {
-				log.Printf("Error processing %s: %v", path, err)
+				logger.Error("error processing file", "path", path, "error", err)
 			}
 		}
 		return nil
 	})
 
 	if err != nil {
-		log.Fatalf("Failed to process configurations: %v", err)
+		logger.Error("failed to process configurations", "error", err)
+		os.Exit(1)
 	}
 
-	log.Println("Provisioning complete!")
+	logger.Info("provisioning complete")
 
 	if *detectOrphans {
-		fmt.Println("\n--- Scanning for Orphan Resources ---")
 		orphans, err := prov.DetectOrphans(ctx)
 		if err != nil {
-			log.Fatalf("Failed to detect orphans: %v", err)
+			logger.Error("failed to detect orphans", "error", err)
+			os.Exit(1)
 		}
-		for _, o := range orphans {
-			fmt.Printf("[Orphan] %s\n", o)
-		}
-		if len(orphans) == 0 {
-			fmt.Println("No orphan resources found. Cluster is fully in sync!")
+		if *jsonOutput {
+			logger.Info("scanning for orphan resources")
+			for _, o := range orphans {
+				parts := strings.SplitN(o, ": ", 2)
+				if len(parts) == 2 {
+					logger.Warn("orphan resource detected", "kind", parts[0], "name", parts[1])
+				} else {
+					logger.Warn("orphan resource detected", "resource", o)
+				}
+			}
+			logger.Info("orphan scan complete", "count", len(orphans))
 		} else {
-			fmt.Printf("Total orphan resources detected: %d\n", len(orphans))
+			fmt.Println("\n--- Scanning for Orphan Resources ---")
+			for _, o := range orphans {
+				fmt.Printf("[Orphan] %s\n", o)
+			}
+			if len(orphans) == 0 {
+				fmt.Println("No orphan resources found. Cluster is fully in sync!")
+			} else {
+				fmt.Printf("Total orphan resources detected: %d\n", len(orphans))
+			}
+			fmt.Println("-------------------------------------")
 		}
-		fmt.Println("-------------------------------------")
 	}
 }

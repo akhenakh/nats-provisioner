@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -193,7 +193,7 @@ func (p *Provisioner) applyResource(ctx context.Context, kind, name string, node
 		return p.applyObjectStore(ctx, cfg, spec)
 
 	default:
-		log.Printf("Warning: Unknown kind '%s'. Skipping.", kind)
+		slog.Warn("unknown kind, skipping", "kind", kind)
 		return nil
 	}
 }
@@ -201,7 +201,7 @@ func (p *Provisioner) applyResource(ctx context.Context, kind, name string, node
 func (p *Provisioner) applyStream(ctx context.Context, cfg jetstream.StreamConfig, spec StreamSpec) error {
 	stream, err := p.js.Stream(ctx, cfg.Name)
 	if errors.Is(err, jetstream.ErrStreamNotFound) {
-		log.Printf("Creating Stream: %s", cfg.Name)
+		slog.Info("creating stream", "name", cfg.Name)
 		_, err = p.js.CreateStream(ctx, cfg)
 		return err
 	} else if err != nil {
@@ -217,7 +217,7 @@ func (p *Provisioner) applyStream(ctx context.Context, cfg jetstream.StreamConfi
 		return nil
 	}
 
-	log.Printf("Updating Stream: %s", cfg.Name)
+	slog.Info("updating stream", "name", cfg.Name)
 	_, err = p.js.UpdateStream(ctx, cfg)
 	return err
 }
@@ -234,7 +234,7 @@ func (p *Provisioner) applyConsumer(ctx context.Context, streamName string, cfg 
 
 	consumer, err := stream.Consumer(ctx, cfg.Durable)
 	if errors.Is(err, jetstream.ErrConsumerNotFound) {
-		log.Printf("Creating Consumer: %s on Stream: %s", cfg.Durable, streamName)
+		slog.Info("creating consumer", "name", cfg.Durable, "stream", streamName)
 		_, err = p.js.CreateOrUpdateConsumer(ctx, streamName, cfg)
 		return err
 	} else if err != nil {
@@ -250,7 +250,7 @@ func (p *Provisioner) applyConsumer(ctx context.Context, streamName string, cfg 
 		return nil
 	}
 
-	log.Printf("Updating Consumer: %s on Stream: %s", cfg.Durable, streamName)
+	slog.Info("updating consumer", "name", cfg.Durable, "stream", streamName)
 	_, err = p.js.CreateOrUpdateConsumer(ctx, streamName, cfg)
 	return err
 }
@@ -258,7 +258,7 @@ func (p *Provisioner) applyConsumer(ctx context.Context, streamName string, cfg 
 func (p *Provisioner) applyKeyValue(ctx context.Context, cfg jetstream.KeyValueConfig, spec KeyValueSpec) error {
 	kv, err := p.js.KeyValue(ctx, cfg.Bucket)
 	if errors.Is(err, jetstream.ErrBucketNotFound) {
-		log.Printf("Creating KeyValue: %s", cfg.Bucket)
+		slog.Info("creating keyvalue", "bucket", cfg.Bucket)
 		_, err = p.js.CreateKeyValue(ctx, cfg)
 		return err
 	} else if err != nil {
@@ -274,7 +274,7 @@ func (p *Provisioner) applyKeyValue(ctx context.Context, cfg jetstream.KeyValueC
 		return nil
 	}
 
-	log.Printf("Updating KeyValue: %s", cfg.Bucket)
+	slog.Info("updating keyvalue", "bucket", cfg.Bucket)
 	_, err = p.js.UpdateKeyValue(ctx, cfg)
 	return err
 }
@@ -282,7 +282,7 @@ func (p *Provisioner) applyKeyValue(ctx context.Context, cfg jetstream.KeyValueC
 func (p *Provisioner) applyObjectStore(ctx context.Context, cfg jetstream.ObjectStoreConfig, spec ObjectStoreSpec) error {
 	obj, err := p.js.ObjectStore(ctx, cfg.Bucket)
 	if errors.Is(err, jetstream.ErrBucketNotFound) {
-		log.Printf("Creating ObjectStore: %s", cfg.Bucket)
+		slog.Info("creating objectstore", "bucket", cfg.Bucket)
 		_, err = p.js.CreateObjectStore(ctx, cfg)
 		return err
 	} else if err != nil {
@@ -316,7 +316,7 @@ func (p *Provisioner) applyObjectStore(ctx context.Context, cfg jetstream.Object
 		return nil
 	}
 
-	log.Printf("Updating ObjectStore: %s", cfg.Bucket)
+	slog.Info("updating objectstore", "bucket", cfg.Bucket)
 	_, err = p.js.UpdateObjectStore(ctx, cfg)
 	return err
 }
