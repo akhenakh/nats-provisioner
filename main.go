@@ -22,6 +22,10 @@ func fetchFromGit(logger *slog.Logger, repoURL, gitUser, gitPass string) (string
 	if err != nil {
 		return "", err
 	}
+	if err := os.Chmod(tempDir, 0700); err != nil {
+		os.RemoveAll(tempDir)
+		return "", fmt.Errorf("failed to secure temp directory: %w", err)
+	}
 
 	cloneOpts := &git.CloneOptions{
 		URL:      repoURL,
@@ -42,20 +46,52 @@ func fetchFromGit(logger *slog.Logger, repoURL, gitUser, gitPass string) (string
 }
 
 func main() {
-	natsURL := flag.String("s", nats.DefaultURL, "NATS Server URL")
-	nkey := flag.String("nkey", "", "NATS NKey Seed")
-	user := flag.String("user", "", "NATS Username")
-	pass := flag.String("pass", "", "NATS Password")
+	natsURL := flag.String("s", nats.DefaultURL, "NATS Server URL (or use NATS_URL env var)")
+	nkey := flag.String("nkey", "", "NATS NKey Seed path (file) or use NATS_NKEY env var")
+	user := flag.String("user", "", "NATS Username (or use NATS_USER env var)")
+	pass := flag.String("pass", "", "NATS Password (or use NATS_PASS env var)")
 
 	localPath := flag.String("path", "", "Local path to YAML file or directory")
 	gitURL := flag.String("git-url", "", "Git repository URL containing configurations")
-	gitUser := flag.String("git-user", "", "Git Username (for private repos)")
-	gitPass := flag.String("git-pass", "", "Git Password/Token (for private repos)")
+	gitUser := flag.String("git-user", "", "Git Username (or use GIT_USER env var)")
+	gitPass := flag.String("git-pass", "", "Git Password/Token (or use GIT_PASS env var)")
 
 	detectOrphans := flag.Bool("detect-orphans", false, "Print resources that exist on the NATS server but are not in the configuration files")
 	jsonOutput := flag.Bool("json", false, "Output logs in JSON format")
 
 	flag.Parse()
+
+	// Use environment variables as fallback for sensitive credentials
+	if *natsURL == nats.DefaultURL {
+		if url := os.Getenv("NATS_URL"); url != "" {
+			*natsURL = url
+		}
+	}
+	if *nkey == "" {
+		if n := os.Getenv("NATS_NKEY"); n != "" {
+			*nkey = n
+		}
+	}
+	if *user == "" {
+		if u := os.Getenv("NATS_USER"); u != "" {
+			*user = u
+		}
+	}
+	if *pass == "" {
+		if p := os.Getenv("NATS_PASS"); p != "" {
+			*pass = p
+		}
+	}
+	if *gitUser == "" {
+		if u := os.Getenv("GIT_USER"); u != "" {
+			*gitUser = u
+		}
+	}
+	if *gitPass == "" {
+		if p := os.Getenv("GIT_PASS"); p != "" {
+			*gitPass = p
+		}
+	}
 
 	opts := &slog.HandlerOptions{Level: slog.LevelInfo}
 	var handler slog.Handler
