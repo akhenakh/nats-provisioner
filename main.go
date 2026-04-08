@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
@@ -129,7 +130,10 @@ func main() {
 	}
 	defer prov.Close()
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var hasErrors bool
 	err = filepath.WalkDir(targetDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -143,6 +147,7 @@ func main() {
 			logger.Info("processing file", "path", path)
 			if err := prov.ProvisionFile(ctx, path); err != nil {
 				logger.Error("error processing file", "path", path, "error", err)
+				hasErrors = true
 			}
 		}
 		return nil
@@ -150,6 +155,11 @@ func main() {
 
 	if err != nil {
 		logger.Error("failed to process configurations", "error", err)
+		os.Exit(1)
+	}
+
+	if hasErrors {
+		logger.Error("provisioning completed with errors")
 		os.Exit(1)
 	}
 
